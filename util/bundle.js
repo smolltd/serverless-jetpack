@@ -144,6 +144,244 @@ const resolveFilePathsFromPatterns = async ({
   };
 };
 
+/* eslint-disable max-statements, no-console, no-magic-numbers */
+
+const normalizePackageSymlinks = async ({
+  cwd,
+  files
+}) => {
+  const statSync = (file) => {
+    const stats = fs.lstatSync(
+      path.join(cwd, file),
+    );
+
+    return [file, stats.isSymbolicLink()];
+  };
+
+  const relativeRealPathedFileToFilesMap = files.reduce((p, c) => {
+    const relativeRealPath = path.relative(cwd, fs.realpathSync(path.join(cwd, c)));
+    p[relativeRealPath] ||= [];
+    p[relativeRealPath].push(c);
+    return p;
+  }, {});
+
+  const filesMap = Object
+    .entries(relativeRealPathedFileToFilesMap)
+    .reduce((p, [relativeRealPathedFile, referringFiles]) => referringFiles
+      .reduce((_p, c) => {
+        if (!c.startsWith(path.join("..", "node_modules") + path.sep)) {
+          _p[c] = relativeRealPathedFile;
+        }
+
+        return _p;
+      }, p),
+    {});
+
+  const nodeModuleFiles = Object
+    .keys(filesMap)
+    .filter((file) => file.startsWith("node_modules")
+      || file.includes(`${path.sep}node_modules${path.sep}`));
+
+  const firstLevelNodeModulesDirs = new Set(
+    nodeModuleFiles
+      .map((file) => {
+        const segments = file.split(path.sep);
+
+        return segments.slice(0, segments.indexOf("node_modules", 1)).join(path.sep);
+      }));
+
+  const firstLevelNodeModulesDirStats = Array
+    .from(firstLevelNodeModulesDirs)
+    .map((dir) => statSync(dir));
+
+  const firstLevelSymlinkedNodeModulesDirs = firstLevelNodeModulesDirStats
+    .filter(([, isSymbolicLink]) => isSymbolicLink)
+    .map(([dir]) => dir);
+
+  const firstLevelSymlinkSources = firstLevelSymlinkedNodeModulesDirs
+    .reduce((p, c) => {
+      p[fs.realpathSync(path.join(cwd, c))] = c;
+      return p;
+    }, {});
+
+  const filesInNestedNodeModules = files
+    .filter((file) => new RegExp(`^node_modules\\${path.sep}.*\\${path.sep}node_modules\\${path.sep}.*`, "i").test(file));
+
+  const nestedNodeModulesDirs = filesInNestedNodeModules
+    .map((file) => {
+      const li = file.lastIndexOf("node_modules");
+      const prefix = file.slice(0, li + "node_modules".length);
+      const segments = file.slice(li).split(path.sep);
+
+
+      return [prefix].concat(
+        segments.slice(1, segments.indexOf("node_modules", 1))
+      ).join(path.sep);
+    });
+
+  const uniqNestedNodeModulesDirs = Array.from(new Set(nestedNodeModulesDirs));
+
+  const nestedNodeModulesDirsByNumberOfNodeModules = uniqNestedNodeModulesDirs
+    .reduce((p, c) => {
+      const nodeModulesCount = (c.match(/node_modules/g) || []).length;
+      p[nodeModulesCount] = p[nodeModulesCount] || [];
+      p[nodeModulesCount].push(c);
+      return p;
+    }, {});
+
+  const descendingNestedNodeModulesCounts = Object
+    .keys(nestedNodeModulesDirsByNumberOfNodeModules)
+    .sort()
+    .reverse();
+
+  const symlinks = {};
+
+  descendingNestedNodeModulesCounts.forEach((c) => {
+    const dirs = nestedNodeModulesDirsByNumberOfNodeModules[c];
+
+    dirs.forEach((dir) => {
+      const segments = dir.split(path.sep);
+      const rootSegments = segments.slice(0, 4);
+      const processableSegments = segments.slice(4);
+
+      const process = (root, branch) => {
+        const relativePath = root.join(path.sep);
+        const [, isSymlink] = statSync(relativePath);
+
+        if (isSymlink) {
+          const fullyQualifiedPath = path.join(cwd, relativePath);
+          const realpath = path.relative(cwd, fs.realpathSync(fullyQualifiedPath));
+          const firstLevelSymlinkSourceKnown = Object.keys(firstLevelSymlinkSources).includes(realpath);
+
+          const firstLevelNodeModulesDir = firstLevelSymlinkSourceKnown
+            ? firstLevelSymlinkSources[realpath]
+            : path.join("node_modules", root.slice(root.lastIndexOf("node_modules") + 1).join("/"));
+
+          if (!firstLevelSymlinkSourceKnown) {
+            firstLevelSymlinkSources[realpath] = firstLevelNodeModulesDir;
+          }
+
+          const latestFiles = Object.keys(filesMap);
+          const filesLoadedAtThisPoint = latestFiles
+            .filter((file) => file.startsWith(relativePath) && !file.slice(relativePath.length).startsWith(`${path.sep}node_modules${path.sep}`));
+
+          const filesToMerge = filesLoadedAtThisPoint
+            .map((file) => ({
+              newPath: path.join(firstLevelNodeModulesDir, file.slice(relativePath.length + 1)),
+              oldPath: file
+            }));
+
+          filesToMerge.forEach((file) => {
+            if (!latestFiles.includes(file.newPath)) {
+              filesMap[file.newPath] = filesMap[file.oldPath];
+              delete filesMap[file.oldPath];
+            }
+          });
+
+          filesLoadedAtThisPoint.forEach((file) => {
+            delete filesMap[file];
+          });
+
+          symlinks[relativePath] = firstLevelNodeModulesDir;
+        }
+
+        if (branch.length > 0) {
+          const nextNodeModulesIndex = branch.indexOf("node_modules", 1);
+          const transferrableSegments = branch.slice(0, nextNodeModulesIndex === -1 ? undefined : nextNodeModulesIndex + 1);
+          const nextRoot = root.concat(transferrableSegments);
+          const nextBranch = branch.slice(transferrableSegments.length);
+
+          process(nextRoot, nextBranch);
+        }
+      };
+
+      process(rootSegments, processableSegments);
+    });
+  });
+
+  let symlinksMutated = true;
+
+  while (symlinksMutated) {
+    symlinksMutated = false;
+
+    const keys = Object.keys(symlinks);
+    const mutatableKeys = keys.filter((key) => (key.match(/node_modules/g) || []).length > 2);
+
+    for (const key of mutatableKeys) {
+      const segments = key.split(path.sep);
+      const prefixSegments = segments.slice(0, segments.lastIndexOf("node_modules"));
+      const chunks = prefixSegments.reduce((p, c) => {
+        if (c === "node_modules") {
+          p.push([c]);
+          return p;
+        }
+
+        p[p.length - 1].push(c);
+        return p;
+      }, []).map((c) => c.join(path.sep));
+
+      const prefixes = chunks.reduce((p, c, i) => p.concat(chunks.slice(0, i + 1).join(path.sep)), []).reverse();
+
+      const mutatablePrefix = prefixes.find((prefix) => keys.includes(prefix));
+
+      if (mutatablePrefix) {
+        const mutatedKey = key.replace(new RegExp(`^${mutatablePrefix}`), symlinks[mutatablePrefix]);
+        symlinks[mutatedKey] = symlinks[key];
+
+        delete symlinks[key];
+
+        symlinksMutated = true;
+      }
+    }
+  }
+
+  let filesMutated = true;
+  const symlinkKeys = Object.keys(symlinks);
+
+  while (filesMutated) {
+    filesMutated = false;
+
+    const filesKeys = Object.keys(filesMap);
+
+    const mutatableFiles = filesKeys
+      .filter((file) => (file.match(/node_modules/g) || []).length > 1);
+
+    for (const file of mutatableFiles) {
+      const segments = file.split(path.sep);
+      const prefixSegments = segments.slice(0, segments.lastIndexOf("node_modules"));
+      const chunks = prefixSegments.reduce((p, c) => {
+        if (c === "node_modules") {
+          p.push([c]);
+          return p;
+        }
+
+        p[p.length - 1].push(c);
+        return p;
+      }, []).map((c) => c.join(path.sep));
+
+      const prefixes = chunks.reduce((p, c, i) => p.concat(chunks.slice(0, i + 1).join(path.sep)), []).reverse();
+
+      const mutatablePrefix = prefixes.find((prefix) => symlinkKeys.includes(prefix));
+
+      if (mutatablePrefix) {
+        const mutatedFile = file.replace(new RegExp(`^${mutatablePrefix}`), symlinks[mutatablePrefix]);
+
+        if (!filesKeys.includes(mutatedFile)) {
+          filesMap[mutatedFile] = filesMap[file];
+        }
+
+        delete filesMap[file];
+
+        filesMutated = true;
+      }
+    }
+  }
+
+  return { files: filesMap, symlinks };
+};
+
+/* eslint-enable max-statements, no-console, no-magic-numbers */
+
 const createDepInclude = async ({ cwd, rootPath, roots }) => {
   // Dependency roots.
   let depRoots = roots;
@@ -375,19 +613,19 @@ const findCollapsed = async ({ files, cwd }) => {
   };
 };
 
-const createZip = async ({ files, cwd, bundlePath }) => {
+const createZip = async ({ files, symlinks, cwd, bundlePath }) => {
   // Sort by name (mutating) to make deterministic.
-  files.sort();
+  const sortedFilenames = Object.keys(files).sort();
 
   // Get all contents.
   //
   // TODO(75): Review if this is too memory-intensive or not performant and
   // consider a more concurrency-optimized solution.
   // https://github.com/FormidableLabs/serverless-jetpack/issues/75
-  const fileObjs = await Promise.all(files.map(
+  const fileObjs = await Promise.all(sortedFilenames.map(
     (name) => Promise.all([
-      readFile(path.join(cwd, name)),
-      readStat(path.join(cwd, name))
+      readFile(path.join(cwd, files[name])),
+      readStat(path.join(cwd, files[name]))
     ])
       .then(([data, stat]) => ({ name, data, stat }))
   ));
@@ -429,6 +667,10 @@ const createZip = async ({ files, cwd, bundlePath }) => {
           mode,
           date: EPOCH
         });
+      });
+
+      Object.entries(symlinks).map(([link, source]) => {
+        zip.symlink(link, path.relative(path.join(cwd, link, ".."), path.join(cwd, source)));
       });
 
       zip.finalize();
@@ -502,20 +744,28 @@ const globAndZip = async ({
 
   // Remove all cwd-relative-root node_modules first. Trace/package modes will
   // then bring `node_modules` individual files back in after.
-  let depInclude = ["!node_modules/**"];
+  const cwdRelativeRootNodeModules = "!node_modules/**";
+  let depInclude = [cwdRelativeRootNodeModules];
   let traceMisses = mapTraceMisses();
+
   if (traceInclude) {
     // [Trace Mode] Trace and introspect all individual dependency files.
     // Add them as _patterns_ so that later globbing exclusions can apply.
     const srcPaths = (await globby(traceInclude, { ...GLOBBY_OPTS, cwd }))
       .map((srcPath) => path.resolve(servicePath, srcPath));
+
     const traced = await traceFiles({ ...traceParams, srcPaths });
     traceMisses = mapTraceMisses({ traced, servicePath });
 
     depInclude = depInclude
       .concat(srcPaths, traced.dependencies)
       // Convert to relative paths and include in patterns for bundling.
-      .map((depPath) => path.relative(servicePath, depPath));
+      // Let the cwd-relative-root node_modules path through untouched,
+      // as this causes unwanted behaviour when the cwd isn't the servicePath
+      // such as when running some kinds of tests.
+      .map((depPath) => depPath === cwdRelativeRootNodeModules
+        ? cwdRelativeRootNodeModules
+        : path.relative(servicePath, depPath));
   } else {
     // [Dependency Mode] Iterate all dependency roots to gather production dependencies.
     depInclude = depInclude.concat(
@@ -528,13 +778,21 @@ const globAndZip = async ({
     { cwd, servicePath, preInclude, depInclude, include, exclude }
   );
 
+  // Preserve package symlinks
+  const { files, symlinks } = await normalizePackageSymlinks({
+    cwd,
+    files: included,
+    servicePath
+  });
+
   // Detect collapsed duplicates.
   // https://github.com/FormidableLabs/serverless-jetpack/issues/109
-  const collapsed = await findCollapsed({ files: included, cwd });
+  const collapsed = await findCollapsed({ files: Object.keys(files), cwd });
 
   // Create package zip.
   await bundle.createZip({
-    files: included,
+    files,
+    symlinks,
     cwd,
     bundlePath
   });

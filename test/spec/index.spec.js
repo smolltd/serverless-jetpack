@@ -8,6 +8,7 @@
 
 const mock = require("mock-fs");
 const sinon = require("sinon");
+const path = require("path");
 
 const Serverless = require("serverless");
 const { getServerlessConfigFile } = require("serverless/lib/utils/getServerlessConfigFile");
@@ -22,8 +23,8 @@ describe("index", () => {
   let serverless;
 
   // [BRITTLE]: Create a mostly-real serverless object for config parsing.
-  const createServerless = async () => {
-    serverless = new Serverless();
+  const createServerless = async (opts = {}) => {
+    serverless = new Serverless(opts);
     serverless.processedInput = {
       options: {},
       commands: []
@@ -100,11 +101,11 @@ describe("index", () => {
           .to.be.calledWithMatch({ traceInclude: ["one.js"] });
         expect(bundle.createZip)
           .to.have.callCount(1).and
-          .to.be.calledWithMatch({ files: [
-            "one.js",
-            "node_modules/one-pkg/index.js",
-            "node_modules/one-pkg/package.json"
-          ] });
+          .to.be.calledWithMatch({ files: {
+            "one.js": "one.js",
+            "node_modules/one-pkg/index.js": "node_modules/one-pkg/index.js",
+            "node_modules/one-pkg/package.json": "node_modules/one-pkg/package.json"
+          } });
       });
 
       it("excludes ignores and package include when tracing", async () => {
@@ -170,14 +171,14 @@ describe("index", () => {
           .to.be.calledWithMatch({ traceInclude: ["has-ignores.js"] });
         expect(bundle.createZip)
           .to.have.callCount(2).and
-          .to.be.calledWithMatch({ files: [
-            "numbers.js",
-            "node_modules/one-pkg/index.js",
-            "node_modules/one-pkg/package.json"
-          ] }).and
-          .to.be.calledWithMatch({ files: [
-            "has-ignores.js"
-          ] });
+          .to.be.calledWithMatch({ files: {
+            "numbers.js": "numbers.js",
+            "node_modules/one-pkg/index.js": "node_modules/one-pkg/index.js",
+            "node_modules/one-pkg/package.json": "node_modules/one-pkg/package.json",
+          } }).and
+          .to.be.calledWithMatch({ files: {
+            "has-ignores.js": "has-ignores.js"
+          } });
       });
 
       it("allows missing when tracing", async () => {
@@ -282,22 +283,22 @@ describe("index", () => {
           .to.be.calledWithMatch({ traceInclude: ["has-missings.js"] });
         expect(bundle.createZip)
           .to.have.callCount(2).and
-          .to.be.calledWithMatch({ files: [
-            "numbers.js",
-            "node_modules/all-missing/index.js",
-            "node_modules/all-missing/package.json",
-            "node_modules/one-pkg/index.js",
-            "node_modules/one-pkg/package.json",
-            "node_modules/two-pkg/index.js",
-            "node_modules/two-pkg/package.json"
-          ] }).and
-          .to.be.calledWithMatch({ files: [
-            "has-missings.js",
-            "node_modules/partially-missing/index.js",
-            "node_modules/partially-missing/package.json",
-            "node_modules/three-actually-on-disk/index.js",
-            "node_modules/three-actually-on-disk/package.json"
-          ] });
+          .to.be.calledWithMatch({ files: {
+            "numbers.js": "numbers.js",
+            "node_modules/all-missing/index.js": "node_modules/all-missing/index.js",
+            "node_modules/all-missing/package.json": "node_modules/all-missing/package.json",
+            "node_modules/one-pkg/index.js": "node_modules/one-pkg/index.js",
+            "node_modules/one-pkg/package.json": "node_modules/one-pkg/package.json",
+            "node_modules/two-pkg/index.js": "node_modules/two-pkg/index.js",
+            "node_modules/two-pkg/package.json": "node_modules/two-pkg/package.json"
+          } }).and
+          .to.be.calledWithMatch({ files: {
+            "has-missings.js": "has-missings.js",
+            "node_modules/partially-missing/index.js": "node_modules/partially-missing/index.js",
+            "node_modules/partially-missing/package.json": "node_modules/partially-missing/package.json",
+            "node_modules/three-actually-on-disk/index.js": "node_modules/three-actually-on-disk/index.js",
+            "node_modules/three-actually-on-disk/package.json": "node_modules/three-actually-on-disk/package.json"
+          } });
       });
 
       it("traces with various trace.include options", async () => {
@@ -440,32 +441,32 @@ describe("index", () => {
         expect(bundle.createZip)
           .to.have.callCount(2).and
           // service package
-          .to.be.calledWithMatch({ files: [
-            "one.js",
-            "two.js",
-            "additional.js",
-            "extra.js",
-            "node_modules/additional-pkg/index.js",
-            "node_modules/additional-pkg/package.json",
-            "node_modules/extra-pkg/index.js",
-            "node_modules/extra-pkg/package.json",
-            "node_modules/one-pkg/index.js",
-            "node_modules/one-pkg/package.json",
-            "node_modules/two-pkg/index.js",
-            "node_modules/two-pkg/package.json"
-          ] }).and
+          .to.be.calledWithMatch({ files: {
+            "one.js": "one.js",
+            "two.js": "two.js",
+            "additional.js": "additional.js",
+            "extra.js": "extra.js",
+            "node_modules/additional-pkg/index.js": "node_modules/additional-pkg/index.js",
+            "node_modules/additional-pkg/package.json": "node_modules/additional-pkg/package.json",
+            "node_modules/extra-pkg/index.js": "node_modules/extra-pkg/index.js",
+            "node_modules/extra-pkg/package.json": "node_modules/extra-pkg/package.json",
+            "node_modules/one-pkg/index.js": "node_modules/one-pkg/index.js",
+            "node_modules/one-pkg/package.json": "node_modules/one-pkg/package.json",
+            "node_modules/two-pkg/index.js": "node_modules/two-pkg/index.js",
+            "node_modules/two-pkg/package.json": "node_modules/two-pkg/package.json"
+          } }).and
           // function package
-          .to.be.calledWithMatch({ files: [
-            "red.js",
-            "additional.js",
-            "green.js",
-            "node_modules/additional-pkg/index.js",
-            "node_modules/additional-pkg/package.json",
-            "node_modules/green-pkg/index.js",
-            "node_modules/green-pkg/package.json",
-            "node_modules/red-pkg/index.js",
-            "node_modules/red-pkg/package.json"
-          ] });
+          .to.be.calledWithMatch({ files: {
+            "red.js": "red.js",
+            "additional.js": "additional.js",
+            "green.js": "green.js",
+            "node_modules/additional-pkg/index.js": "node_modules/additional-pkg/index.js",
+            "node_modules/additional-pkg/package.json": "node_modules/additional-pkg/package.json",
+            "node_modules/green-pkg/index.js": "node_modules/green-pkg/index.js",
+            "node_modules/green-pkg/package.json": "node_modules/green-pkg/package.json",
+            "node_modules/red-pkg/index.js": "node_modules/red-pkg/index.js",
+            "node_modules/red-pkg/package.json": "node_modules/red-pkg/package.json"
+          } });
       });
 
       describe("trace.dynamic.resolutions", () => {
@@ -611,20 +612,20 @@ describe("index", () => {
           expect(bundle.createZip)
             .to.have.callCount(1).and
             // service package
-            .to.be.calledWithMatch({ files: [
-              "one.js",
-              "lib/just-ignore.js",
-              "lib/one-another.js",
-              "node_modules/added-by-one-another-pkg/nested/file.js",
-              "node_modules/added-by-one-another-pkg/package.json",
-              "node_modules/added-by-resolve-trace-pkg/index.js",
-              "node_modules/added-by-resolve-trace-pkg/package.json",
-              "node_modules/needs-resolutions-pkg/index.js",
-              "node_modules/needs-resolutions-pkg/lib/file.js",
-              "node_modules/needs-resolutions-pkg/package.json",
-              "node_modules/one-pkg/index.js",
-              "node_modules/one-pkg/package.json"
-            ] });
+            .to.be.calledWithMatch({ files: {
+              "one.js": "one.js",
+              "lib/just-ignore.js": "lib/just-ignore.js",
+              "lib/one-another.js": "lib/one-another.js",
+              "node_modules/added-by-one-another-pkg/nested/file.js": "node_modules/added-by-one-another-pkg/nested/file.js",
+              "node_modules/added-by-one-another-pkg/package.json": "node_modules/added-by-one-another-pkg/package.json",
+              "node_modules/added-by-resolve-trace-pkg/index.js": "node_modules/added-by-resolve-trace-pkg/index.js",
+              "node_modules/added-by-resolve-trace-pkg/package.json": "node_modules/added-by-resolve-trace-pkg/package.json",
+              "node_modules/needs-resolutions-pkg/index.js": "node_modules/needs-resolutions-pkg/index.js",
+              "node_modules/needs-resolutions-pkg/lib/file.js": "node_modules/needs-resolutions-pkg/lib/file.js",
+              "node_modules/needs-resolutions-pkg/package.json": "node_modules/needs-resolutions-pkg/package.json",
+              "node_modules/one-pkg/index.js": "node_modules/one-pkg/index.js",
+              "node_modules/one-pkg/package.json": "node_modules/one-pkg/package.json",
+            } });
         });
 
         it("resolves misses at function-level", async () => {
@@ -742,20 +743,20 @@ describe("index", () => {
           expect(bundle.createZip)
             .to.have.callCount(1).and
             // service package
-            .to.be.calledWithMatch({ files: [
-              "one.js",
-              "node_modules/added-by-resolve-trace-pkg/index.js",
-              "node_modules/added-by-resolve-trace-pkg/package.json",
-              "node_modules/also-added-by-resolve-trace-pkg/index.js",
-              "node_modules/also-added-by-resolve-trace-pkg/package.json",
-              "node_modules/one-pkg/index.js",
-              "node_modules/one-pkg/package.json",
-              "node_modules/parent-pkg/index.js",
-              "node_modules/parent-pkg/node_modules/needs-resolutions-pkg/index.js",
-              "node_modules/parent-pkg/node_modules/needs-resolutions-pkg/lib/file.js",
-              "node_modules/parent-pkg/node_modules/needs-resolutions-pkg/package.json",
-              "node_modules/parent-pkg/package.json"
-            ] });
+            .to.be.calledWithMatch({ files: {
+              "one.js": "one.js",
+              "node_modules/added-by-resolve-trace-pkg/index.js": "node_modules/added-by-resolve-trace-pkg/index.js",
+              "node_modules/added-by-resolve-trace-pkg/package.json": "node_modules/added-by-resolve-trace-pkg/package.json",
+              "node_modules/also-added-by-resolve-trace-pkg/index.js": "node_modules/also-added-by-resolve-trace-pkg/index.js",
+              "node_modules/also-added-by-resolve-trace-pkg/package.json": "node_modules/also-added-by-resolve-trace-pkg/package.json",
+              "node_modules/one-pkg/index.js": "node_modules/one-pkg/index.js",
+              "node_modules/one-pkg/package.json": "node_modules/one-pkg/package.json",
+              "node_modules/parent-pkg/index.js": "node_modules/parent-pkg/index.js",
+              "node_modules/parent-pkg/node_modules/needs-resolutions-pkg/index.js": "node_modules/parent-pkg/node_modules/needs-resolutions-pkg/index.js",
+              "node_modules/parent-pkg/node_modules/needs-resolutions-pkg/lib/file.js": "node_modules/parent-pkg/node_modules/needs-resolutions-pkg/lib/file.js",
+              "node_modules/parent-pkg/node_modules/needs-resolutions-pkg/package.json": "node_modules/parent-pkg/node_modules/needs-resolutions-pkg/package.json",
+              "node_modules/parent-pkg/package.json": "node_modules/parent-pkg/package.json"
+            } });
         });
 
         it("fails for unresolved misses at function-level", async () => {
@@ -840,6 +841,190 @@ describe("index", () => {
             "Bailing on tracing dynamic import misses. Source Files: 0, Dependencies: 1"
           );
         });
+      });
+
+      /* eslint-disable max-statements, no-console, no-magic-numbers */
+      it("it includes deduplicates symlinks in the zip", async () => {
+        mock({
+          app: {
+            "serverless.yml": `
+              service: sls-mocked
+
+              custom:
+                jetpack:
+                  trace: true
+
+              provider:
+                name: aws
+                runtime: nodejs12.x
+
+              functions:
+                one:
+                  handler: distFiles/one.handler
+            `,
+            distFiles: {
+              "one.js": `
+                const one = require("@one/one-pkg");
+                const two = require("@two/two-pkg");
+                const three = require("@three/three-pkg");
+
+                exports.handler = async () => ({
+                  body: JSON.stringify({ message: one + two + three })
+                });
+              `
+            },
+            node_modules: {
+              "@one": {
+                "one-pkg": mock.symlink({
+                  path: "../../../packages/one-pkg"
+                })
+              },
+              "@two": {
+                "two-pkg": mock.symlink({
+                  path: "../../../packages/two-pkg"
+                })
+              },
+              "@three": {
+                "three-pkg": {
+                  "package.json": stringify({
+                    main: "index.js"
+                  }),
+                  "index.js": `
+                    const five = require("@five/five-pkg");
+                    const six = require("@six/six-pkg");
+                    module.exports = "three" + five + six;
+                  `,
+                  node_modules: {
+                    "@five": {
+                      "five-pkg": mock.symlink({
+                        path: "../../../../../../packages/five-pkg"
+                      })
+                    },
+                    "@six": {
+                      "six-pkg": {
+                        "package.json": stringify({
+                          main: "index.js"
+                        }),
+                        "index.js": `
+                          module.exports = "six";
+                        `
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          packages: {
+            "five-pkg": {
+              "package.json": stringify({
+                main: "index.js"
+              }),
+              "index.js": `
+                const six = require("@six/six-pkg");
+
+                module.exports = 'five' + six;
+              `,
+              node_modules: {
+                "@six": {
+                  "six-pkg": {
+                    "package.json": stringify({
+                      main: "index.js"
+                    }),
+                    "index.js": `
+                      module.exports = "six";
+                    `
+                  }
+                }
+              }
+            },
+            "four-pkg": {
+              "package.json": stringify({
+                main: "index.js"
+              }),
+              "index.js": `
+                const five = require("@five/five-pkg");
+                module.exports = 'four' + five;
+              `,
+              node_modules: {
+                "@five": {
+                  "five-pkg": mock.symlink({
+                    path: "../../../five-pkg"
+                  })
+                }
+              }
+            },
+            "one-pkg": {
+              "package.json": stringify({
+                main: "index.js"
+              }),
+              "index.js": `
+                const two = require("@two/two-pkg");
+                const twoExtra = require("@two/two-pkg/extra");
+                const four = require("@four/four-pkg");
+                module.exports = 'one' + two + twoExtra + four;
+              `,
+              node_modules: {
+                "@two": {
+                  "two-pkg": mock.symlink({
+                    path: "../../../two-pkg"
+                  })
+                },
+                "@four": {
+                  "four-pkg": mock.symlink({
+                    path: "../../../four-pkg"
+                  })
+                }
+              }
+            },
+            "two-pkg": {
+              "package.json": stringify({
+                main: "index.js"
+              }),
+              "index.js": "module.exports = 'two';",
+              "extra.js": "module.exports = 'two-extra';"
+            }
+          }
+        });
+
+        const plugin = new Jetpack(await createServerless({
+          servicePath: path.join(process.cwd(), "app")
+        }));
+
+        await plugin.package();
+
+        expect(Jetpack.prototype.globAndZip)
+          .to.have.callCount(1).and
+          .to.be.calledWithMatch({ traceInclude: ["distFiles/one.js"] });
+
+        expect(bundle.createZip)
+          .to.have.callCount(1).and
+          .to.be.calledWithMatch({
+            files: {
+              "distFiles/one.js": "distFiles/one.js",
+              "node_modules/@five/five-pkg/index.js": "../packages/five-pkg/index.js",
+              "node_modules/@five/five-pkg/node_modules/@six/six-pkg/index.js": "../packages/five-pkg/node_modules/@six/six-pkg/index.js",
+              "node_modules/@five/five-pkg/node_modules/@six/six-pkg/package.json": "../packages/five-pkg/node_modules/@six/six-pkg/package.json",
+              "node_modules/@five/five-pkg/package.json": "../packages/five-pkg/package.json",
+              "node_modules/@four/four-pkg/index.js": "../packages/four-pkg/index.js",
+              "node_modules/@four/four-pkg/package.json": "../packages/four-pkg/package.json",
+              "node_modules/@one/one-pkg/index.js": "../packages/one-pkg/index.js",
+              "node_modules/@one/one-pkg/package.json": "../packages/one-pkg/package.json",
+              "node_modules/@three/three-pkg/index.js": "node_modules/@three/three-pkg/index.js",
+              "node_modules/@three/three-pkg/node_modules/@six/six-pkg/index.js": "node_modules/@three/three-pkg/node_modules/@six/six-pkg/index.js",
+              "node_modules/@three/three-pkg/node_modules/@six/six-pkg/package.json": "node_modules/@three/three-pkg/node_modules/@six/six-pkg/package.json",
+              "node_modules/@three/three-pkg/package.json": "node_modules/@three/three-pkg/package.json",
+              "node_modules/@two/two-pkg/extra.js": "../packages/two-pkg/extra.js",
+              "node_modules/@two/two-pkg/index.js": "../packages/two-pkg/index.js",
+              "node_modules/@two/two-pkg/package.json": "../packages/two-pkg/package.json"
+            },
+            symlinks: {
+              "node_modules/@four/four-pkg/node_modules/@five/five-pkg": "node_modules/@five/five-pkg",
+              "node_modules/@one/one-pkg/node_modules/@four/four-pkg": "node_modules/@four/four-pkg",
+              "node_modules/@one/one-pkg/node_modules/@two/two-pkg": "node_modules/@two/two-pkg",
+              "node_modules/@three/three-pkg/node_modules/@five/five-pkg": "node_modules/@five/five-pkg"
+            }
+          });
       });
     });
 
