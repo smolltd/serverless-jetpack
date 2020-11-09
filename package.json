@@ -39,7 +39,7 @@
     "node": ">=8.0.0"
   },
   "dependencies": {
-    "archiver": "^3.1.1",
+    "archiver": "github:smolltd/node-archiver#symlink-dirs-zip-stream",
     "globby": "^9.2.0",
     "inspectdep": "^0.2.0",
     "jest-worker": "^25.5.0",
