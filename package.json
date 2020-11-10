@@ -1,9 +1,9 @@
 {
-  "name": "serverless-jetpack",
+  "name": "@smolltd/serverless-jetpack",
   "version": "0.10.7",
   "description": "A faster JavaScript packager for Serverless applications.",
   "main": "index.js",
-  "repository": "https://github.com/FormidableLabs/serverless-jetpack",
+  "repository": "https://github.com/smolltd/serverless-jetpack",
   "author": "Ryan Roemer <ryan.roemer@formidable.com>",
   "license": "MIT",
   "keywords": [
@@ -72,5 +72,8 @@
     "sinon": "^9.0.1",
     "sinon-chai": "^3.5.0",
     "strip-ansi": "^6.0.0"
+  },
+  "publishConfig": {
+    "registry": "https://npm.pkg.github.com"
   }
 }
