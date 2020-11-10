@@ -670,7 +670,7 @@ const createZip = async ({ files, symlinks, cwd, bundlePath }) => {
       });
 
       Object.entries(symlinks).map(([link, source]) => {
-        zip.symlink(link, path.relative(path.join(cwd, link, ".."), path.join(cwd, source)));
+        zip.symlink(link, path.relative(path.join(cwd, link, ".."), path.join(cwd, source)), 493);
       });
 
       zip.finalize();
