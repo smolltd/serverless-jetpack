@@ -362,7 +362,7 @@
   resolved "https://registry.npmjs.org/@sinonjs/text-encoding/-/text-encoding-0.7.1.tgz"
   integrity sha512-+iTbntw2IZPb/anVDbypzfQa+ay64MW0Zo8aJ8gZPWMMK6/OubMVb6lUPMagqjOPnmtauXnFCACVl3O7ogjeqQ==
 
-"@smolltd/archiver@^5.0.2":
+"@smolltd/archiver@^5.0.2-1":
   "integrity" "sha512-sIpCB8ZDeM1Gcg/M+N2aOrSuYeLnuCxhEWgMrVQXPMBys/yF5nZaS1KwoBc3vqSzhXUpVd3UM6k+yVJmou/WBA=="
   "resolved" "https://npm.pkg.github.com/download/@smolltd/archiver/5.0.2/8ead3902468675ba954a92a920b53d83ca0a2f9b8bdd977a2f1f85dc5e71eb1f"
   "version" "5.0.2"
