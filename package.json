@@ -39,8 +39,8 @@
     "node": ">=8.0.0"
   },
   "dependencies": {
-    "archiver": "github:smolltd/node-archiver#symlink-mode",
-    "globby": "^9.2.0",
+    "archiver": "^5.1.0",
+    "globby": "^11.0.1",
     "inspectdep": "^0.2.0",
     "jest-worker": "^25.5.0",
     "make-dir": "^3.0.2",

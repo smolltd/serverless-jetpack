@@ -160,7 +160,7 @@ const normalizePackageSymlinks = async ({
 
   const relativeRealPathedFileToFilesMap = files.reduce((p, c) => {
     const relativeRealPath = path.relative(cwd, fs.realpathSync(path.join(cwd, c)));
-    p[relativeRealPath] ||= [];
+    p[relativeRealPath] = p[relativeRealPath] || [];
     p[relativeRealPath].push(c);
     return p;
   }, {});
