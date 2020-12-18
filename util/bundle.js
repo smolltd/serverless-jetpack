@@ -8,7 +8,7 @@ const makeDir = require("make-dir");
 const archiver = require("archiver");
 const globby = require("globby");
 const nanomatch = require("nanomatch");
-const { traceFiles } = require("trace-deps");
+const { traceFiles } = require("@smolltd/trace-deps");
 const { findProdInstalls } = require("inspectdep");
 
 const IS_WIN = process.platform === "win32";
